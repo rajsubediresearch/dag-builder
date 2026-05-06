@@ -229,19 +229,55 @@ function DAGCanvas({ edges, width = 600, height = 400 }) {
 
   const nodeRadius = name => Math.max(28, Math.min(48, name.length * 4.2 + 22));
 
-  // Draw arrows stopping at node border
-  const arrowPath = (from, to) => {
+  // Compute curved bezier path between two nodes, bending away from nearby nodes
+  const curvedPath = (from, to) => {
     const p1 = pos[from], p2 = pos[to];
     if (!p1 || !p2) return null;
-    const r2 = nodeRadius(to) + 4;
+    const r1 = nodeRadius(from), r2 = nodeRadius(to) + 5;
     const dx = p2.x - p1.x, dy = p2.y - p1.y;
     const dist = Math.sqrt(dx * dx + dy * dy);
     if (dist < 1) return null;
-    const x1 = p1.x + (dx / dist) * nodeRadius(from);
-    const y1 = p1.y + (dy / dist) * nodeRadius(from);
-    const x2 = p2.x - (dx / dist) * r2;
-    const y2 = p2.y - (dy / dist) * r2;
-    return { x1, y1, x2, y2 };
+
+    // Perpendicular unit vector for curve offset
+    const px = -dy / dist, py = dx / dist;
+
+    // Base curve offset — increases when other nodes lie close to the straight path
+    let offset = 0;
+    nodeNames.forEach(name => {
+      if (name === from || name === to) return;
+      const np = pos[name];
+      if (!np) return;
+      // Project node onto the edge line
+      const t = ((np.x - p1.x) * dx + (np.y - p1.y) * dy) / (dist * dist);
+      if (t < 0.1 || t > 0.9) return; // only care about nodes along the path
+      // Distance from node to the straight line
+      const closestX = p1.x + t * dx, closestY = p1.y + t * dy;
+      const dToLine = Math.sqrt((np.x - closestX) ** 2 + (np.y - closestY) ** 2);
+      const threshold = nodeRadius(name) + 20;
+      if (dToLine < threshold) {
+        // Push curve away — direction based on which side node is on
+        const side = (np.x - p1.x) * py - (np.y - p1.y) * px > 0 ? -1 : 1;
+        offset += side * (threshold - dToLine) * 0.6;
+      }
+    });
+
+    // Also add a small consistent curve for parallel edges (same pair, reversed)
+    const hasReverse = links.some(l => l.from === to && l.to === from);
+    if (hasReverse) offset += 30;
+
+    // Control point at midpoint + perpendicular offset
+    const mx = (p1.x + p2.x) / 2 + px * offset;
+    const my = (p1.y + p2.y) / 2 + py * offset;
+
+    // Start/end points on node borders (accounting for curve direction)
+    const startAngle = Math.atan2(my - p1.y, mx - p1.x);
+    const endAngle   = Math.atan2(my - p2.y, mx - p2.x);
+    const x1 = p1.x + Math.cos(startAngle) * r1;
+    const y1 = p1.y + Math.sin(startAngle) * r1;
+    const x2 = p2.x + Math.cos(endAngle)   * r2;
+    const y2 = p2.y + Math.sin(endAngle)   * r2;
+
+    return { d: `M ${x1} ${y1} Q ${mx} ${my} ${x2} ${y2}` };
   };
 
   const modifiers = Object.entries(nodeRoles)
@@ -266,18 +302,19 @@ function DAGCanvas({ edges, width = 600, height = 400 }) {
         </marker>
       </defs>
 
-      {/* Edges */}
+      {/* Edges — curved bezier paths */}
       {links.map((link, i) => {
-        const path = arrowPath(link.from, link.to);
-        if (!path) return null;
+        const curve = curvedPath(link.from, link.to);
+        if (!curve) return null;
         const fromRole = nodeRoles[link.from];
         const isDash = fromRole === "unmeasured";
         const edgeObj = edges.find(e => e.from === link.from && e.to === link.to);
         const warn = edgeObj && validate(edgeObj.fromRole, edgeObj.toRole);
         return (
-          <line
+          <path
             key={i}
-            x1={path.x1} y1={path.y1} x2={path.x2} y2={path.y2}
+            d={curve.d}
+            fill="none"
             stroke={warn ? "#EA580C" : isDash ? "#9CA3AF" : "#374151"}
             strokeWidth={warn ? 1.5 : 1.2}
             strokeDasharray={isDash ? "6 4" : warn ? "4 3" : "none"}
