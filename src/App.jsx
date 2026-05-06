@@ -510,16 +510,26 @@ dag_tidy$data <- dag_tidy$data %>%
   mutate(node_size = node_sizes[name])
 
 # Plot: white fill, black border, black text, size-scaled
-ggplot(dag_tidy, aes(x = x, y = y, xend = xend, yend = yend)) +
-  geom_dag_edges() +
-  geom_dag_node(
-    aes(size = node_size),
+ggplot(dag_tidy$data, aes(x = x, y = y, xend = xend, yend = yend)) +
+  geom_segment(
+    data = dag_tidy$data[!is.na(dag_tidy$data$xend), ],
+    aes(x = x, y = y, xend = xend, yend = yend),
+    arrow = arrow(length = unit(6, "pt"), type = "closed", ends = "last"),
+    colour = "black", linewidth = 0.5
+  ) +
+  geom_point(
+    data = dag_tidy$data[!duplicated(dag_tidy$data$name), ],
+    aes(x = x, y = y, size = node_size),
     shape = 21, fill = "white", color = "black",
     stroke = 1.2, show.legend = FALSE
   ) +
   scale_size_identity() +
-  geom_dag_text(color = "black", size = 3.0) +
-  theme_dag_blank() +
+  geom_text(
+    data = dag_tidy$data[!duplicated(dag_tidy$data$name), ],
+    aes(x = x, y = y, label = name),
+    color = "black", size = 3.0
+  ) +
+  theme_void() +
   theme(plot.background = element_rect(fill = "white", color = NA))
 ${exposures.length && outcomes.length ? `
 # Minimal adjustment sets
