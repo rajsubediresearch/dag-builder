@@ -4,6 +4,7 @@ A browser-based causal diagram (DAG) editor that exports dagitty R code.
 No installation required for end users — just open in a browser.
 
 ---
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.20058009.svg)](https://doi.org/10.5281/zenodo.20058009)
 
 ## Quickstart (run locally)
 
@@ -70,5 +71,6 @@ dag-builder/
 ## Citation
 
 If used in a manuscript:
+- Raj Subedi. (2026). rajsubediresearch/dag-builder: DAG Builder v1.0.0 (v1.0.0). Zenodo. https://doi.org/10.5281/zenodo.20058009
 - Textor J et al. (2016). Robust causal inference using directed acyclic graphs:
   the R package 'dagitty'. Int J Epidemiol. 45(6):1887–1894.
