@@ -511,9 +511,7 @@ dag_tidy$data <- dag_tidy$data %>%
 
 # Plot: white fill, black border, black text, size-scaled
 ggplot(dag_tidy, aes(x = x, y = y, xend = xend, yend = yend)) +
-  geom_dag_edges(
-    arrow = grid::arrow(length = unit(5, "pt"), type = "closed", ends = "last")
-  ) +
+  geom_dag_edges() +
   geom_dag_node(
     aes(size = node_size),
     shape = 21, fill = "white", color = "black",
