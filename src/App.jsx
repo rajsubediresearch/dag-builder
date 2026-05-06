@@ -510,22 +510,36 @@ dag_tidy$data <- dag_tidy$data %>%
   mutate(node_size = node_sizes[name])
 
 # Plot: white fill, black border, black text, size-scaled
-ggplot(dag_tidy$data, aes(x = x, y = y, xend = xend, yend = yend)) +
+# Shorten edges so arrowheads land outside node circles
+edges_df <- dag_tidy$data[!is.na(dag_tidy$data$xend), ]
+nodes_df  <- dag_tidy$data[!duplicated(dag_tidy$data$name) & !is.na(dag_tidy$data$x), ]
+
+# Compute shortened endpoints
+r_scale <- 0.12  # approximate node radius in layout units
+dx <- edges_df$xend - edges_df$x
+dy <- edges_df$yend - edges_df$y
+len <- sqrt(dx^2 + dy^2)
+edges_df$x2 <- edges_df$xend - (dx / len) * r_scale
+edges_df$y2 <- edges_df$yend - (dy / len) * r_scale
+edges_df$x1 <- edges_df$x    + (dx / len) * r_scale * 0.5
+edges_df$y1 <- edges_df$y    + (dy / len) * r_scale * 0.5
+
+ggplot() +
   geom_segment(
-    data = dag_tidy$data[!is.na(dag_tidy$data$xend), ],
-    aes(x = x, y = y, xend = xend, yend = yend),
+    data = edges_df,
+    aes(x = x1, y = y1, xend = x2, yend = y2),
     arrow = arrow(length = unit(6, "pt"), type = "closed", ends = "last"),
     colour = "black", linewidth = 0.5
   ) +
   geom_point(
-    data = dag_tidy$data[!duplicated(dag_tidy$data$name), ],
+    data = nodes_df,
     aes(x = x, y = y, size = node_size),
     shape = 21, fill = "white", color = "black",
     stroke = 1.2, show.legend = FALSE
   ) +
   scale_size_identity() +
   geom_text(
-    data = dag_tidy$data[!duplicated(dag_tidy$data$name), ],
+    data = nodes_df,
     aes(x = x, y = y, label = name),
     color = "black", size = 3.0
   ) +
