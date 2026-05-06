@@ -225,9 +225,76 @@ function layoutNodes(nodeNames, links) {
 function DAGCanvas({ edges, width = 600, height = 400 }) {
   const { nodeRoles, links } = buildGraph(edges);
   const nodeNames = Object.keys(nodeRoles);
-  const pos = layoutNodes(nodeNames, links);
+
+  // Lift positions into state so nodes can be dragged
+  const [positions, setPositions] = useState({});
+  const dragRef = useRef(null); // { name, offsetX, offsetY }
+  const svgRef = useRef(null);
+
+  // Re-run layout only when node set changes (new/removed nodes)
+  // Dragged positions are preserved via the positions state
+  useEffect(() => {
+    const computed = layoutNodes(nodeNames, links);
+    setPositions(prev => {
+      const next = { ...computed };
+      // Preserve any manually dragged positions
+      Object.keys(prev).forEach(name => {
+        if (computed[name]) next[name] = prev[name];
+      });
+      return next;
+    });
+  }, [nodeNames.join(",")]);
+
+  const pos = positions;
 
   const nodeRadius = name => Math.max(28, Math.min(48, name.length * 4.2 + 22));
+
+  // Mouse drag handlers
+  const onMouseDown = (e, name) => {
+    e.preventDefault();
+    const svg = svgRef.current;
+    if (!svg) return;
+    const rect = svg.getBoundingClientRect();
+    const scaleX = 600 / rect.width;
+    const scaleY = 400 / rect.height;
+    const mouseX = (e.clientX - rect.left) * scaleX;
+    const mouseY = (e.clientY - rect.top) * scaleY;
+    dragRef.current = {
+      name,
+      offsetX: mouseX - (pos[name]?.x || 0),
+      offsetY: mouseY - (pos[name]?.y || 0),
+    };
+  };
+
+  const onMouseMove = useCallback((e) => {
+    if (!dragRef.current) return;
+    const svg = svgRef.current;
+    if (!svg) return;
+    const rect = svg.getBoundingClientRect();
+    const scaleX = 600 / rect.width;
+    const scaleY = 400 / rect.height;
+    const mouseX = (e.clientX - rect.left) * scaleX;
+    const mouseY = (e.clientY - rect.top) * scaleY;
+    const { name, offsetX, offsetY } = dragRef.current;
+    setPositions(prev => ({
+      ...prev,
+      [name]: {
+        x: Math.max(50, Math.min(550, mouseX - offsetX)),
+        y: Math.max(45, Math.min(355, mouseY - offsetY)),
+      }
+    }));
+  }, []);
+
+  const onMouseUp = useCallback(() => { dragRef.current = null; }, []);
+
+  useEffect(() => {
+    window.addEventListener("mousemove", onMouseMove);
+    window.addEventListener("mouseup", onMouseUp);
+    return () => {
+      window.removeEventListener("mousemove", onMouseMove);
+      window.removeEventListener("mouseup", onMouseUp);
+    };
+  }, [onMouseMove, onMouseUp]);
 
   // Compute curved bezier path between two nodes, bending away from nearby nodes
   const curvedPath = (from, to) => {
@@ -301,7 +368,12 @@ function DAGCanvas({ edges, width = 600, height = 400 }) {
   );
 
   return (
-    <svg width={width} height={height} style={{ width: "100%", height: "100%" }}>
+    <svg
+      ref={svgRef}
+      width={width} height={height}
+      style={{ width: "100%", height: "100%", cursor: dragRef.current ? "grabbing" : "default" }}
+      viewBox="0 0 600 400"
+    >
       <defs>
         <marker id="arrowhead" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
           <polygon points="0 0, 8 3, 0 6" fill="#374151" />
@@ -351,7 +423,11 @@ function DAGCanvas({ edges, width = 600, height = 400 }) {
         }
 
         return (
-          <g key={name}>
+          <g
+            key={name}
+            onMouseDown={e => onMouseDown(e, name)}
+            style={{ cursor: "grab" }}
+          >
             <circle
               cx={p.x} cy={p.y} r={r}
               fill={role.fill} stroke={role.stroke} strokeWidth={1.5}
