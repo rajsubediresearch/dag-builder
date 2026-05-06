@@ -466,14 +466,16 @@ function DAGCanvas({ edges, width = 600, height = 400 }) {
   );
 }
 
+const toR = name => name.replace(/\s+/g, "_").replace(/[^A-Za-z0-9_.]/g, "_");
+
 function generateRCode(edges) {
   const { nodeRoles, links } = buildGraph(edges);
-  const exposures = Object.entries(nodeRoles).filter(([,r]) => r === "exposure").map(([n]) => n);
-  const outcomes  = Object.entries(nodeRoles).filter(([,r]) => r === "outcome").map(([n]) => n);
-  const latents   = Object.entries(nodeRoles).filter(([,r]) => r === "unmeasured").map(([n]) => n);
+  const exposures = Object.entries(nodeRoles).filter(([,r]) => r === "exposure").map(([n]) => toR(n));
+  const outcomes  = Object.entries(nodeRoles).filter(([,r]) => r === "outcome").map(([n]) => toR(n));
+  const latents   = Object.entries(nodeRoles).filter(([,r]) => r === "unmeasured").map(([n]) => toR(n));
 
-  const edgeStr = links.map(l => `  ${l.from} -> ${l.to}`).join("\n");
-  const nodeStr = Object.keys(nodeRoles).map(n => `  ${n}`).join("\n");
+  const edgeStr = links.map(l => `  ${toR(l.from)} -> ${toR(l.to)}`).join("\n");
+  const nodeStr = Object.keys(nodeRoles).map(n => `  ${toR(n)}`).join("\n");
 
   return `library(dagitty)
 library(ggdag)
