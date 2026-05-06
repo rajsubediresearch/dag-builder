@@ -9,7 +9,8 @@ const ROLES = [
   { id: "unmeasured", label: "Unmeasured",         fill: "#FEF3C7", stroke: "#D97706", text: "#78350F", dash: true  },
   { id: "proxy",      label: "Proxy of unmeasured",fill: "#FCE7F3", stroke: "#DB2777", text: "#831843", dash: false },
   { id: "modifier",   label: "Effect modifier",    fill: "#ECFCCB", stroke: "#65A30D", text: "#1A2E05", dash: false },
-  { id: "selection",  label: "Selection bias",     fill: "#FFEDD5", stroke: "#EA580C", text: "#7C2D12", dash: false },
+  { id: "selection",  label: "Selection bias",        fill: "#FFEDD5", stroke: "#EA580C", text: "#7C2D12", dash: false },
+  { id: "iv",         label: "Instrumental variable", fill: "#F0FDF4", stroke: "#15803D", text: "#14532D", dash: false },
 ];
 
 const roleMap = Object.fromEntries(ROLES.map(r => [r.id, r]));
@@ -27,6 +28,14 @@ const VALIDATIONS = [
     msg: "Collider → Exposure/Outcome: colliders are caused by exposure and outcome, not causes of them." },
   { test: (f, t, fr, tr) => fr === "proxy" && tr === "exposure",
     msg: "Proxy → Exposure: a proxy measures the unmeasured variable — it doesn't cause the exposure." },
+  { test: (f, t, fr, tr) => fr === "iv" && tr === "outcome",
+    msg: "IV → Outcome violates the exclusion restriction. An instrument only affects the outcome through the exposure." },
+  { test: (f, t, fr, tr) => fr === "iv" && tr === "confounder",
+    msg: "IV → Confounder is unusual — instruments should be independent of confounders." },
+  { test: (f, t, fr, tr) => fr === "unmeasured" && tr === "iv",
+    msg: "Unmeasured → IV violates the IV independence assumption. Instruments must be independent of unmeasured confounders." },
+  { test: (f, t, fr, tr) => fr === "iv" && tr === "mediator",
+    msg: "IV → Mediator violates the exclusion restriction. The instrument should only act through the exposure." },
 ];
 
 function validate(fromRole, toRole) {
@@ -363,6 +372,10 @@ function DAGCanvas({ edges, width = 600, height = 400 }) {
     .filter(([, r]) => r === "modifier")
     .map(([n]) => n);
 
+  const ivNodes = Object.entries(nodeRoles)
+    .filter(([, r]) => r === "iv")
+    .map(([n]) => n);
+
   const hasWarning = edges.some(e =>
     e.from && e.to && validate(e.fromRole, e.toRole)
   );
@@ -456,6 +469,12 @@ function DAGCanvas({ edges, width = 600, height = 400 }) {
           * Effect modifier{modifiers.length > 1 ? "s" : ""}: {modifiers.join(", ")}
         </text>
       )}
+      {/* Footnote for instrumental variables */}
+      {ivNodes.length > 0 && (
+        <text x={10} y={height - (modifiers.length > 0 ? 24 : 10)} fontSize={10} fill="#15803D" fontStyle="italic" fontFamily="sans-serif">
+          † Instrument{ivNodes.length > 1 ? "s" : ""}: {ivNodes.join(", ")} — verify exclusion restriction &amp; independence
+        </text>
+      )}
 
       {nodeNames.length === 0 && (
         <text x={width / 2} y={height / 2} textAnchor="middle" fontSize={13} fill="#9CA3AF" fontFamily="sans-serif">
@@ -484,6 +503,11 @@ function generateRCode(edges) {
 
   const latentStr = latents.length
     ? `latents(dag)   <- c(${latents.map(l => `"${l}"`).join(", ")})`
+    : "";
+
+  const ivList = Object.entries(nodeRoles).filter(([,r]) => r === "iv").map(([n]) => toR(n));
+  const ivComment = ivList.length
+    ? `\n# Instrumental variable${ivList.length > 1 ? "s" : ""}: ${ivList.join(", ")}\n# Verify: (1) IV->Exposure edge present, (2) no IV->Outcome direct path, (3) IV independent of unmeasured confounders`
     : "";
 
   return `library(dagitty)
@@ -545,6 +569,7 @@ ggplot() +
   ) +
   theme_void() +
   theme(plot.background = element_rect(fill = "white", color = NA))
+${ivComment}
 ${exposures.length && outcomes.length ? `
 # Minimal adjustment sets
 adjustmentSets(dag, exposure = "${exposures[0]}", outcome = "${outcomes[0]}")
@@ -707,14 +732,27 @@ export default function App() {
               {validEdges.length > 0 && (() => {
                 const { nodeRoles } = buildGraph(edges);
                 const mods = Object.entries(nodeRoles).filter(([,r]) => r === "modifier").map(([n]) => n);
-                return mods.length > 0 ? (
-                  <div style={{
-                    marginTop: 12, padding: "8px 12px", borderRadius: 8,
-                    background: "#ECFCCB", border: "1px solid #A3E635", fontSize: 11, color: "#1A2E05",
-                  }}>
-                    <strong>Effect modifiers:</strong> {mods.join(", ")} — assess heterogeneity of the exposure–outcome association across strata.
-                  </div>
-                ) : null;
+                const ivs  = Object.entries(nodeRoles).filter(([,r]) => r === "iv").map(([n]) => n);
+                return (
+                  <>
+                    {mods.length > 0 && (
+                      <div style={{
+                        marginTop: 12, padding: "8px 12px", borderRadius: 8,
+                        background: "#ECFCCB", border: "1px solid #A3E635", fontSize: 11, color: "#1A2E05",
+                      }}>
+                        <strong>Effect modifiers:</strong> {mods.join(", ")} — assess heterogeneity of the exposure–outcome association across strata.
+                      </div>
+                    )}
+                    {ivs.length > 0 && (
+                      <div style={{
+                        marginTop: 8, padding: "8px 12px", borderRadius: 8,
+                        background: "#F0FDF4", border: "1px solid #86EFAC", fontSize: 11, color: "#14532D",
+                      }}>
+                        <strong>Instrument{ivs.length > 1 ? "s" : ""}:</strong> {ivs.join(", ")} — valid if: (1) IV→Exposure edge exists, (2) no direct IV→Outcome path, (3) IV independent of unmeasured confounders.
+                      </div>
+                    )}
+                  </>
+                );
               })()}
             </div>
           ) : (
