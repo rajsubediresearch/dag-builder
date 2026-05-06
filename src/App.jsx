@@ -477,21 +477,52 @@ function generateRCode(edges) {
   const edgeStr = links.map(l => `  ${toR(l.from)} -> ${toR(l.to)}`).join("\n");
   const nodeStr = Object.keys(nodeRoles).map(n => `  ${toR(n)}`).join("\n");
 
+  // Node sizes scaled by label length
+  const nodeSizeLines = Object.keys(nodeRoles)
+    .map(n => `  "${toR(n)}" = ${Math.max(14, Math.min(28, toR(n).length * 1.6 + 10)).toFixed(0)}`)
+    .join(",\n");
+
+  const latentStr = latents.length
+    ? `latents(dag)   <- c(${latents.map(l => `"${l}"`).join(", ")})`
+    : "";
+
   return `library(dagitty)
 library(ggdag)
 library(ggplot2)
+library(dplyr)
 
 dag <- dagitty('dag {
 ${nodeStr}
 ${edgeStr}
 }')
-${exposures.length ? `\nexposures(dag) <- c(${exposures.map(e => `"${e}"`).join(", ")})` : ""}
+${exposures.length ? `exposures(dag) <- c(${exposures.map(e => `"${e}"`).join(", ")})` : ""}
 ${outcomes.length  ? `outcomes(dag)  <- c(${outcomes.map(o => `"${o}"`).join(", ")})` : ""}
-${latents.length   ? `latents(dag)   <- c(${latents.map(l => `"${l}"`).join(", ")})` : ""}
+${latentStr}
 
-# Plot
-ggdag(dag, layout = "nicely", node_size = 18, text_size = 3.2) +
-  theme_dag_blank()
+# Node sizes scaled by label length
+node_sizes <- c(
+${nodeSizeLines}
+)
+
+# Build tidy DAG
+dag_tidy <- tidy_dagitty(dag, layout = "nicely", seed = 42)
+dag_tidy$data <- dag_tidy$data %>%
+  mutate(node_size = node_sizes[name])
+
+# Plot: white fill, black border, black text, size-scaled
+ggplot(dag_tidy, aes(x = x, y = y, xend = xend, yend = yend)) +
+  geom_dag_edges(
+    arrow = grid::arrow(length = unit(5, "pt"), type = "closed", ends = "last")
+  ) +
+  geom_dag_node(
+    aes(size = node_size),
+    shape = 21, fill = "white", color = "black",
+    stroke = 1.2, show.legend = FALSE
+  ) +
+  scale_size_identity() +
+  geom_dag_text(color = "black", size = 3.0) +
+  theme_dag_blank() +
+  theme(plot.background = element_rect(fill = "white", color = NA))
 ${exposures.length && outcomes.length ? `
 # Minimal adjustment sets
 adjustmentSets(dag, exposure = "${exposures[0]}", outcome = "${outcomes[0]}")
