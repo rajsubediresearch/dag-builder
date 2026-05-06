@@ -243,27 +243,39 @@ function DAGCanvas({ edges, width = 600, height = 400 }) {
 
     // Base curve offset — increases when other nodes lie close to the straight path
     let offset = 0;
+    let dominantSide = 0;
     nodeNames.forEach(name => {
       if (name === from || name === to) return;
       const np = pos[name];
       if (!np) return;
       // Project node onto the edge line
       const t = ((np.x - p1.x) * dx + (np.y - p1.y) * dy) / (dist * dist);
-      if (t < 0.1 || t > 0.9) return; // only care about nodes along the path
+      if (t < 0.05 || t > 0.95) return; // only care about nodes along the path
       // Distance from node to the straight line
       const closestX = p1.x + t * dx, closestY = p1.y + t * dy;
       const dToLine = Math.sqrt((np.x - closestX) ** 2 + (np.y - closestY) ** 2);
-      const threshold = nodeRadius(name) + 20;
+      const threshold = nodeRadius(name) + 55; // larger threshold catches near-misses
       if (dToLine < threshold) {
-        // Push curve away — direction based on which side node is on
         const side = (np.x - p1.x) * py - (np.y - p1.y) * px > 0 ? -1 : 1;
-        offset += side * (threshold - dToLine) * 0.6;
+        const push = (threshold - dToLine) * 1.1; // stronger push
+        offset += side * push;
+        dominantSide += side;
       }
     });
 
-    // Also add a small consistent curve for parallel edges (same pair, reversed)
+    // If multiple nodes on same side, amplify further
+    if (Math.abs(dominantSide) > 1) offset *= 1.3;
+
+    // Minimum curve — every edge gets a slight bend for visual clarity
+    if (Math.abs(offset) < 18) {
+      // Consistent small curve based on edge index to separate parallel edges
+      const edgeIndex = links.findIndex(l => l.from === from && l.to === to);
+      offset = 18 * (edgeIndex % 2 === 0 ? 1 : -1);
+    }
+
+    // Reversed edges always curve opposite
     const hasReverse = links.some(l => l.from === to && l.to === from);
-    if (hasReverse) offset += 30;
+    if (hasReverse) offset = Math.abs(offset) * 40;
 
     // Control point at midpoint + perpendicular offset
     const mx = (p1.x + p2.x) / 2 + px * offset;
