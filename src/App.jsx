@@ -382,8 +382,11 @@ function DAGCanvas({ edges, width = 600, height = 400 }) {
 
   return (
     <svg
+      id="dag-svg"
       ref={svgRef}
-      width={width} height={height}
+      xmlns="http://www.w3.org/2000/svg"
+      width={width}
+      height={height}
       style={{ width: "100%", height: "100%", cursor: dragRef.current ? "grabbing" : "default" }}
       viewBox="0 0 600 400"
     >
@@ -784,7 +787,7 @@ export default function App() {
             border: "1px solid #E5E7EB", overflow: "hidden",
             display: "flex", alignItems: "center", justifyContent: "center",
           }}>
-            <div id="dag-svg" style={{ width: "100%", height: "100%" }}>
+            <div style={{ width: "100%", height: "100%" }}>
               <DAGCanvas edges={edges} width={600} height={400} />
             </div>
           </div>
